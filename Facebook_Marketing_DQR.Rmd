@@ -1,0 +1,861 @@
+---
+title: "Data Quality Report of Facebook Marketing Project"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document:
+    latex_engine: xelatex
+---
+
+**Project: Facebook Marketing Project**   
+**Creator: Cheng Chen**  
+**Date: 07/08/2018**  
+
+
+**File: Data Quality Report (DQR)**  
+Description: In general, Data Quality Report (DQR) is a preliminary quantitative analysis that explores and documents basic characteristics of a data file. For question 1, we will evaluate the data quality and provide a short comment along with visualizations. 
+
+### 1. Load Dataset
+
+```{r 1-load dataset, error = FALSE, warning = FALSE, echo=FALSE}
+# load libraries
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(grid)
+library(gridExtra)
+```
+
+```{r 1-load dataset-1}
+# change work directory
+setwd("/Users/craigdavid/Downloads/Facebook Marketing Project/Facebook Marketing Project/Data")
+
+# read four datasets
+dat_ppl = read.csv(file = 'people.csv', sep = ',', 
+                   fill = FALSE, na.strings = c('NA', ''),
+                   header = TRUE, stringsAsFactors = FALSE)
+dat_repay = read.csv(file = 'repayment.csv', sep = ',', 
+                     fill = FALSE, na.strings = c('NA', ''),
+                     header = TRUE, stringsAsFactors = FALSE)
+dat_dev = read.csv(file = 'device.csv', sep = ',', 
+                   fill = FALSE, na.strings = c('NA', ''),
+                   header = TRUE, stringsAsFactors = FALSE)
+dat_mpesa = read.csv(file = 'mpesa.csv', sep = ',', 
+                     fill = FALSE, na.strings = c('NA', ''),
+                     header = TRUE, stringsAsFactors = FALSE)
+```
+
+
+### 2. DQR: dat_ppl
+
+#### 2.1 File Description:  
+File Name: dataAnalystChallenge_people.csv  
+File Info: loan application survey questions  
+Source: **Company**  
+Number of Records: 1,000  
+Number of Variables: 18 fields, 1 index, 2 date, 4 numerical, 11 categorial   
+<br>
+
+
+#### 2.2 List of info for each variable
+<br>
+
+
+##### Variable 1: person_id_random
+Description: 10-digit unique borrower identifier    
+Number of Unique Values: 1,000, no missing value    
+<br>  
+
+
+##### Variable 2: birthday
+Description: yyyy/mm/dd of each borrower  
+Percent of Populated: 984/1000 = 98.4%; 16 missing values;    
+Number of Unique Values: 939  
+Range of Values: from 1905/11/13 to 1999/9/19  
+Note: this variable contains bad records like 1979/02/29  
+
+```{r 2-dat_ppl-birthday, echo=FALSE}
+# histogram: year of birthday
+dat_bd = dat_ppl[!is.na(dat_ppl['birthday']),]
+dat_bd['year'] = as.integer(substr(dat_bd$birthday, 1, 4)) # extract first 4 chrs as year
+ggplot(data = dat_bd, aes(x = year)) + 
+  geom_histogram(bins = 50, fill = 'steelblue') +
+  ylab("Number") +
+  xlab("Year of Birth") +
+  ggtitle("Histogram: Year of Birthday") +
+  theme_bw()
+```
+**Comments**: The plot of year of birthday is left-skewed and some records have abnormal small number. The birthday info could be used to generate an 'age' variable and it will be right-skewed. We could potentially address the skewness through algebra transformation.  
+<br>
+
+
+##### Variable 3: gender
+Description: M = male, F = female  
+Percent of Populated: 982/1000 = 98.2%; 18 missing values;   
+Number of Unique Values (NA excluded): 2  
+
+```{r 2-dat_ppl-gender, echo=FALSE}
+# barchart: of gender
+dat_gender =  dat_ppl
+dat_gender[is.na(dat_gender['gender']), 'gender'] = 'unknown' # include NA in this analyses
+dat_gender$gender = factor(dat_gender$gender, levels = c('M', 'F', 'unknown')) # set the order of levels 
+dat_gender %>%
+  group_by(gender) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(gender), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Gender") +
+  ggtitle("Barchart: Gender") +
+  theme_bw()
+```
+**Comments**: If the dataset is randomly sampled, then the proportion of Male(M) borrowers is dramatically larger than Female(F) borrowers. Considering the number of NA records is small (1.8% of population), it is relatively safe to impute the NA with Male(M) without adding a new variable or introducing a big error.   
+<br>
+
+
+##### Variable 4: signup_date
+Description: time of signup in East Africa Time  
+Percent of Populated: 100.0%; no missing values;   
+Number of Unique Values: 1000  
+Range of Values: from 2014-03-20 10:37:34 to 2015-07-28 22:10:59, 495 days 11 hours 33 minutes 25 seconds  
+
+```{r 2-dat_ppl-signup_date, error = FALSE, warning = FALSE, echo=FALSE}
+# histogram: signup_date
+dat_sign = dat_ppl[!is.na(dat_ppl['signup_date']),]
+dat_sign$signup_date = as.POSIXct(substr(dat_sign$signup_date, 1, 10)) # extract first 10 chrs as year-month-day
+ggplot(dat_sign, aes(signup_date, ..count..)) + 
+  geom_histogram(bins = 100, fill = 'steelblue') +
+  theme_bw() + 
+  xlab('Sign-up Date') +
+  ylab('Number') + 
+  ggtitle("Histogram: Signup_date") +
+  scale_x_datetime(breaks = date_breaks("3 months"),
+                   labels = date_format("%Y-%b"),
+                    limits = c(as.POSIXct("2014-03-01"), 
+                              as.POSIXct("2015-07-30")) )
+```
+**Comments**: Signup_date is potentially useful in understanding when borrowers start to actually use the app to loan money. It helps profile the borrowers. What's more, if the datasets is bigger, this will help with analyses like cohort analyses, or seasonality analyses. The dataset has a small date range so at this stage we are not able to find out any seasonality.        
+<br>
+
+
+```{r 2-dat_ppl-signup_datey-2, error = FALSE, warning = FALSE, echo=FALSE}
+# barchart: day of month of signup_date
+dat_sign$monthday = mday(dat_sign$signup_date)
+dat_sign %>% 
+  group_by(monthday) %>% 
+  summarise(count = n()) %>%
+  ggplot(aes(x = monthday, y = count)) + 
+  geom_bar(stat='identity', fill = 'steelblue') +
+  theme_bw() + 
+  xlab('Day of Month of Sign-up Date') +
+  ylab('Number') + 
+  ggtitle("Barchart: Day of Month of Signup_date")
+```
+**Comments**: Considering people normally need money to pay for things like house rents, which might happen on a specific day of a month. Intuitively they would sign up and take the loans immediately. According to the barchart, it seems that more sign-ups happen in the last 10 days of each month. If the difference still exists in the larger amount of data, this would potentially help with profiling some types of loans and understand the borrowers. However, if it is the company that usually throw its marketing compaign on last 10 days of each month, the previous thoughts are no longer valid.            
+<br>
+
+
+##### Variable 5: fb_friend_count  
+Description: number of Facebook friends upon sign-up    
+Percent of Populated: 983/1000 = 98.3%; 17 missing values;   
+Number of Unique Values: 710  
+Summary of Statistics:   
+
+```{r 2-dat_ppl-fb_friend_count, echo=FALSE}
+summary(dat_ppl$fb_friend_count)
+```
+```{r 2-dat_ppl-fb_friend_count-2, echo=FALSE}
+# histogram: fb friend count
+dat_fb = dat_ppl[!is.na(dat_ppl['fb_friend_count']),]
+ggplot(data = dat_fb, aes(x = fb_friend_count)) + 
+  geom_histogram(bins = 50, fill = 'steelblue') +
+  ylab("Number") +
+  xlab("FB Friend Count") +
+  ggtitle("Histogram: FB Friend Count") +
+  scale_x_sqrt() +
+  theme_bw()
+```
+**Comments**: FB friend count would be a indicator of the borrower's profile, e.g. whether he has a big network or a small one. The majority of borrowers have a friend count under 1,000 according to the figure above. The histogram is right-skewed and we can investigate whether a borrower with larger FB friend count is more likely to repay the loans.          
+<br>
+
+
+##### Variable 6: current_home_years
+Description: number of years in current residence  
+Percent of Populated: 991/1000 = 99.1%; 9 missing values;   
+Number of Unique Values (NA excluded): 6  
+
+```{r 2-dat_ppl-current_home_years, echo=FALSE}
+# barchart: of current_home_years
+dat_chy =  dat_ppl
+dat_chy[is.na(dat_chy['current_home_years']), 'current_home_years'] = 'unknown' # include NA in this analyses
+dat_chy$current_home_years = factor(dat_chy$current_home_years, 
+                                    levels = c('5+', '4', '3', '2', '1', '0', 'unknown')) # set the order of levels 
+dat_chy %>%
+  group_by(current_home_years) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(current_home_years), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("current_home_years") +
+  ggtitle("Barchart: Current_home_years") +
+  theme_bw()
+```
+**Comments**: Current_home_years indicates the borrower's living status. A decent assumption here could be: the longer the borrower lives in his/her current residence, the more stable his/her financial status and more likely to repay the loans. It would be something worth to be investigated.    
+<br>
+
+
+##### Variable 7: current_home_months   
+Description: number of months in current residence  
+Percent of Populated: 988/1000 = 98.8%; 12 missing values;   
+Number of Unique Values (NA excluded): 12  
+
+**Comments**: This variable is less useful if we evaluate it standalone. It should be analyzed together with current_home_years. In the further analyses, we can integrate them together into one variable.       
+<br> 
+
+
+##### Variable 8: living_situation  
+Description: stated living situation (free form optional)  
+Percent of Populated: 991/1000 = 99.1%; 9 missing values;   
+Number of Unique Values (NA excluded): 20 
+
+```{r 2-dat_ppl-living_situation, echo=FALSE}
+# barchart: of living_situation
+dat_ls =  dat_ppl
+dat_ls[is.na(dat_ls['living_situation']), 'living_situation'] = 'NA' # include NA in this analyses
+answer_list = c('pay_rent', 'own_home', 'with_family', 'student_housing', 'other', 'NA')
+dat_ls[!(dat_ls[,'living_situation'] %in% answer_list), 'living_situation'] = 'other-open-ended'
+dat_ls$living_situation = factor(dat_ls$living_situation, 
+                                    levels = c(answer_list, 'other-open-ended')) # set the order of levels 
+dat_ls %>%
+  group_by(living_situation) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(living_situation), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("living_situation") +
+  ggtitle("Barchart: Living_situation") +
+  theme_bw()
+```
+**Comments**: It seems that most of the borrowers pay rents for living, which reasonates with comments in the sign-up date variable. Paying rents could be a main reason in making loans and it might help with profiling the borrower. Besides, we should analyse the repayment result between people with different living situations. This is also a question which borrowers can opt in writing open-ended response. Intuitively people would write open-ended response to demonstrate their purpose of loan to get better chance of getting approval. However, as the data is small and very few open-ended reponses are collected here. We are not able to discover the relation between open-ended reponses and the repayment.      
+<br>
+
+
+##### Variable 9: current_job_years   
+Description: number of years in current job    
+Percent of Populated: 767/1000 = 76.7%; 233 missing values;   
+Number of Unique Values (NA excluded): 6  
+
+```{r 2-dat_ppl-current_job_years, echo=FALSE}
+# barchart: of current_job_years
+dat_cjy =  dat_ppl
+dat_cjy[is.na(dat_cjy['current_job_years']), 'current_job_years'] = 'unknown' # include NA in this analyses
+dat_cjy$current_job_years = factor(dat_cjy$current_job_years, 
+                                    levels = c('5+', '4', '3', '2', '1', '0', 'unknown')) # set the order of levels 
+dat_cjy %>%
+  group_by(current_job_years) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(current_job_years), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("current_job_years") +
+  ggtitle("Barchart: Current_job_years") +
+  theme_bw()
+```
+**Comments**: Similar as current_home_years, current_job_years indicates the borrower's career status. A decent assumption here could be: the longer the borrower takes his/her current job, the more stable his/her financial status and more likely to repay the loans. It would be something worth to be investigated later.      
+<br>
+
+
+##### Variable 10: current_job_months  
+Description: number of months in current job  
+Percent of Populated: 755/1000 = 75.5%; 245 missing values;   
+Number of Unique Values (NA excluded): 12  
+
+**Comments**: This variable is less useful if we evaluate it standalone. It should be analyzed together with current_job_years In the further analyses, we can integrate them together into one variable.       
+<br> 
+
+
+##### Variable 11: education
+Description: stated level of education     
+Percent of Populated: 740/1000 = 74.0%; 260 missing values;     
+Number of Unique Values (NA excluded): 5     
+
+```{r 2-dat_ppl-education, echo=FALSE}
+# barchart: of education
+dat_edu =  dat_ppl
+dat_edu[is.na(dat_edu['education']), 'education'] = 'NA' # include NA in this analyses
+dat_edu$education = factor(dat_edu$education,
+                           levels = c('college', 'high_school', 'primary', 'masters', 'none', 'NA')) # set the order of levels 
+dat_edu %>%
+  group_by(education) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(education), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("education") +
+  ggtitle("Barchart: Education") +
+  theme_bw()
+```
+**Comments**: Intuitively, people with higher education should be more likely to repay on time. People that leave it as blank (NA) are likely to have no or lower education. But as people are applying for loans, they might have a sense that if they claim to have a high education, they are more likely to be trusted by the company and receive the loans. And it could be counterintuitive to find out that borrower higher education are more likely to default. As people would benefit from faking education history, we should be aware of this and dive deep in analysis.   
+<br>
+
+
+##### Variable 12: how_much_paid
+Description: value provided by applicant in Kenyan shillings     
+Percent of Populated: 987/1000 = 98.7%; 13 missing values;    
+Number of Unique Values: 163  
+Summary of Statistics:   
+
+```{r 2-dat_ppl-how_much_paid, echo=FALSE}
+summary(dat_ppl$how_much_paid)
+```
+
+```{r 2-dat_ppl-how_much_paid-2, error = FALSE, warning = FALSE, echo=FALSE}
+# histogram: how_much_paid
+dat_hmp = dat_ppl[!is.na(dat_ppl['how_much_paid']),]
+ggplot(data = dat_hmp, aes(x = how_much_paid)) + 
+  geom_histogram(bins = 50, fill = 'steelblue') +
+  ylab("Kenyan shillings") +
+  xlab("How Much Paid") +
+  ggtitle("Histogram: How Much Paid") +
+  scale_x_log10() +
+  theme_bw()
+```
+**Comments**: The majority of borrowers have an income of more than 10,000 Kenyan shillings and less than 100,000 Kenyan shillings. This is a good indicator of the financial status of the borrowers and could be used to profile the borrowers and better market and acquire new borrowers. Also, it helps to build out more products and loan options.       
+<br>
+
+
+
+##### Variable 13: how_often_paid
+Description: frequency of payment provided by applicant  
+Percent of Populated: 986/1000 = 98.6%; 14 missing values;    
+Number of Unique Values (NA excluded): 5   
+
+```{r 2-dat_ppl-how_often_paid, echo=FALSE}
+# barchart: of how_often_paid
+dat_hop = dat_ppl
+dat_hop[is.na(dat_hop['how_often_paid']), 'how_often_paid'] = 'NA' # include NA in this analyses
+answer_list = c('monthly', 'daily', 'weekly', 'NA')
+dat_hop[!(dat_hop[,'how_often_paid'] %in% answer_list), 'how_often_paid'] = 'other/open-ended'
+dat_hop$how_often_paid = factor(dat_hop$how_often_paid, 
+                                    levels = c(answer_list, 'other/open-ended')) # set the order of levels 
+dat_hop %>%
+  group_by(how_often_paid) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(how_often_paid), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("How_often_paid") +
+  ggtitle("Barchart: How_often_paid") +
+  theme_bw()
+```
+**Comments**: 70% borrowers are paid monthly. Around 18% borrowers are paid daily while 11% borrowers are paid weekly. The variable how_often_paid is a useful metric in profiling and marketing the borrowers.        
+<br>
+
+
+##### Variable 14: referral_source  
+Description: stated referral/sign-up source  
+Percent of Populated: 807/1000 = 80.7%; 193 missing values;     
+Number of Unique Values (NA excluded): 16 
+
+```{r 2-dat_ppl-referral_source, echo=FALSE}
+# barchart: of referral_source
+dat_refer = dat_ppl
+dat_refer[is.na(dat_refer['referral_source']), 'referral_source'] = 'NA' # include NA in this analyses
+answer_list = c('facebook', 'friend', 'google_play_store', 'family', 'twitter', 'NA')
+dat_refer[!(dat_refer[,'referral_source'] %in% answer_list), 'referral_source'] = 'other/open-ended'
+dat_refer$referral_source = factor(dat_refer$referral_source, 
+                                    levels = c('facebook', 'friend', 'google_play_store', 
+                                               'family', 'other/open-ended', 'twitter', 'NA')) # set the order of levels 
+dat_refer %>%
+  group_by(referral_source) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(referral_source), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Referral_source") +
+  ggtitle("Barchart: Referral_source") +
+  theme_bw()
+```
+**Comments**: Reference is a good way to create organic user growth. If people are referred by friends, they usually trust the product in the first place. Most new borrowers are referred through facebook, friends and google store. Combining with repayment dataset, it will be useful to know which channel creates more valuable new customers and strategize user acquistion in a more informed way.      
+<br>
+
+
+##### Variable 15: outstanding_loan  
+Description: stated existence of an ongoing loan with other financial institutions.  
+Percent of Populated: 995/1000 = 99.5%; 5 missing values;    
+Number of Unique Values (NA excluded): 2   
+
+```{r 2-dat_ppl-outstanding_loan, echo=FALSE}
+# barchart: of outstanding_loan
+dat_osl = dat_ppl
+dat_osl[is.na(dat_osl['outstanding_loan']), 'outstanding_loan'] = 'unknown' # include NA in this analyses
+dat_osl$outstanding_loan = factor(dat_osl$outstanding_loan, levels = c('no', 'yes', 'unknown')) # set the order of levels 
+dat_osl %>%
+  group_by(outstanding_loan) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(outstanding_loan), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Outstanding_loan") +
+  ggtitle("Barchart: Outstanding_loan") +
+  theme_bw()
+```
+**Comments**: This is a good indicator of borrower's financial status. If the borrower states 'yes', it is likely that they actually have another loan. But we should be aware of the fact that people would put 'no' in the application survey while they actually have outstanding loan to get the loan application approved by the company.      
+<br>
+
+
+##### Variable 16: mpesa_how_often  
+Description: stated use of M-PESA (Safaricom mobile money) – recoded from numeric to text values, numeric are weekly usage.  
+Percent of Populated: 997/1000 = 99.7%; 3 missing values;    
+Number of Unique Values (NA excluded): 5   
+
+```{r 2-dat_ppl-mpesa_how_often, echo=FALSE}
+# barchart: of mpesa_how_often
+dat_mho = dat_ppl
+dat_mho[is.na(dat_mho['mpesa_how_often']), 'mpesa_how_often'] = 'unknown' # include NA in this analyses
+dat_mho$mpesa_how_often = factor(dat_mho$mpesa_how_often, levels = c('few_times_a_month', 
+                                                                     'few_times_a_week', 
+                                                                     'daily', '10+', '4-9', 
+                                                                     'unknown')) # set the order of levels 
+dat_mho %>%
+  group_by(mpesa_how_often) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(mpesa_how_often), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Mpesa_how_often") +
+  ggtitle("Barchart: Mpesa_how_often") +
+  theme_bw()
+```
+**Comments**: More than half of borrows use M-PESA several times a week and around 40% borrowers use on a daily basis. This helps profile the borrowers and design more customized loan options or products for them.     
+<br>
+
+
+##### Variable 17: relationship_status  
+Description: stated relationship status (married, single, etc.)  
+Percent of Populated: 689/1000 = 68.9%; 311 missing values;   
+Number of Unique Values (NA excluded): 4  
+
+```{r 2-dat_ppl-relationship_status, echo=FALSE}
+# barchart: of relationship_status
+dat_rs = dat_ppl
+dat_rs[is.na(dat_rs['relationship_status']), 'relationship_status'] = 'unknown' # include NA in this analyses
+dat_rs$relationship_status = factor(dat_rs$relationship_status, 
+                                    levels = c('married', 'single', 'long-term', 'alternative', 'unknown')) # set the order of levels 
+dat_rs %>%
+  group_by(relationship_status) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(relationship_status), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Relationship_status") +
+  ggtitle("Barchart: Relationship_status") +
+  theme_bw()
+```
+**Comments**: Around 45% borrowers claim to be married and around 16% borrowers claim to be single. Combing with repay data, this variable could have a good predictive power. Intutively, married people are more stable in financial and people in alternative relationship would be financially wealthy to try complex relationshi. On the contrary, single people might be financially insufficient and people with long-term relationship might find it hard to finance marriage.   
+<br>
+
+
+##### Variable 18: is_employed  
+Description: employment status (yes, no)  
+Percent of Populated: 687/1000 = 68.7%; 313 missing values;   
+Number of Unique Values (NA excluded): 2  
+
+```{r 2-dat_ppl-is_employed, echo=FALSE}
+# barchart: of is_employed
+dat_ie = dat_ppl
+dat_ie[is.na(dat_ie['is_employed']), 'is_employed'] = 'unknown' # include NA in this analyses
+dat_ie$is_employed = factor(dat_ie$is_employed, levels = c('yes', 'no', 'unknown')) # set the order of levels 
+dat_ie %>%
+  group_by(is_employed) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(is_employed), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("Is_employed") +
+  ggtitle("Barchart: Is_employed") +
+  theme_bw()
+```
+**Comments**: It is convincing that people that put 'no' here actually do not have a job. As this is application survey, people could fake data with intention. Combing with repay data, this variable could have a good predictive power.     
+<br>
+
+
+
+### 3. DQR: dat_repay
+
+#### 3.1 File Description:
+
+File Name: dataAnalystChallenge_repayment.csv   
+File Info: loan disbursement and repayment dates  
+Source: the company  
+Number of Records: 1,000   
+Number of Variables: 5 fields, 1 index, 1 date, 1 numerical, 2 Date Strings   
+<br>
+
+
+#### 3.2 List of info for each variable
+<br>
+
+
+##### Variable 1: person_id_random
+Description: 10-digit unique borrower identifier    
+Number of Unique Values: 1,000, no missing value    
+<br>  
+
+
+##### Variable 2: nLoans
+Description: total loans taken by borrower     
+Percent of Populated: 100.0%; no missing value;    
+Number of Unique Values: 24  
+Summary of Statistics:   
+
+```{r 3-dat_repay-nLoans, echo=FALSE}
+summary(dat_repay$nLoans)
+```
+
+```{r 3-dat_repay-nLoans-2, error = FALSE, warning = FALSE, echo=FALSE}
+# histogram: nLoans
+dat_nLoans = dat_repay[!is.na(dat_repay['nLoans']),]
+ggplot(data = dat_nLoans, aes(x = nLoans)) + 
+  geom_histogram(fill = 'steelblue', bins = 30) +
+  ylab('Number') +
+  xlab('nLoans') +
+  ggtitle("Histogram: nLoans") +
+  theme_bw()
+```
+**Comments**: This is a right-skewed plot. In this dataset, most borrowers have made less than 10 loans. Note, this is an on-going loan profile and history. Though some borrower defaults but other borrowers are still engaging in the platform.               
+<br>
+
+
+##### Variable 3: loanStartDates
+Description: date strings of loan disbursement        
+Percent of Populated: 100.0%; no missing value;    
+Number of Unique Values: 871     
+<br>
+
+**Comments**: This field is linked with the previous nLaons field. The number of dates of each date string matches with corresponding nLoans. Combined with sign-up date, we can understand when users make their first loans after sign-up. Together with loanPaidDates, we can understand the behavior of repaying and making next loans. These help with profiling the users and strategizing the user acquisition campaign.                   
+<br>
+
+
+##### Variable 4: loanPaidDates
+Description: dates of full loan repayments        
+Percent of Populated: 727/1000 = 72.7%; 273 missing values;    
+Number of Unique Values: 631     
+<br>
+
+**Comments**: Missing data of this field comprises two parts (1) borrower defaults in the first loan, (2) borrower just starts the loan (within 21 days against current date) and is not required to repay at present (current date， 2015-08-19). This field also contains some log error. For example, according to the the company loan policy, the borrower can start a new loan once he pays the full loan back. So the number of dates in the string of 'loanPaidDates' should be either nLoans or (nLoans-1). However, sometimes it is not the case. Combined with loanStartDates, we can create different variables related with 'Default' for further analyses.                
+<br>   
+   
+
+##### Variable 5: currentDate   
+Description: date that the data was extracted, a constant date 2015-08-19               
+Percent of Populated: 100.0%; no missing value;    
+Number of Unique Values: 1     
+<br>
+
+
+
+
+
+### 4. DQR: dat_repay
+
+#### 4.1 File Description:
+
+File Name: dataAnalystChallenge_device.csv     
+File Info: device characteristics     
+Source: the company  
+Number of Records: 973   
+Number of Variables: 7 fields, 1 index, 3 numerical, 3 Categorical   
+<br>
+
+
+#### 4.2 List of info for each variable
+<br>
+
+##### Variable 1: person_id_random
+Description: 10-digit unique borrower identifier    
+Number of Unique Values: 973, no missing value    
+<br>  
+
+
+##### Variable 2: device_model  
+Description: device model name   
+Percent of Populated: 972/973 = 99.9%, 1 missing value   
+Number of Unique Values (NA excluded): 254  
+<br>  
+
+**Comments**: The device field is very useful and supported by facebook marketing manager. This is a very objective measure of the user's finacial status as more expensive device means more rich the borrowers would be. However, due to the complexity of matching all the device with the its price of 3 years ago, we leave this useful field aside and use an workaround. In this workaround, we believe the two fields: mkopo_version_name and  android_version, (or includes the three binary fields, hasDualSim, hasWlan, hasBluetooth as well) could represent the quality/price of the device and the financial status of the users.                
+<br>
+
+
+##### Variable 3: hasDualSim
+Description: technical specification  
+Percent of Populated: 972/973 = 99.9%; 1 missing value;   
+Number of Unique Values (NA excluded): 2  
+
+```{r 4-dat_dev-hasDualSim, echo=FALSE}
+# barchart: of hasDualSim
+dat_dualsim = dat_dev[!is.na(dat_dev['hasDualSim']), ]
+dat_dualsim$hasDualSim = factor(dat_dualsim$hasDualSim, levels = c(1, 0)) # set the order of levels 
+dat_dualsim %>%
+  group_by(hasDualSim) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(hasDualSim), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("hasDualSim") +
+  ggtitle("Barchart: hasDualSim") +
+  theme_bw()
+```
+**Comments**: Around 20% devices support dual sim cards. This field is useful combined with repay dataset;                  
+<br>  
+
+
+##### Variable 4: hasWlan
+Description: technical specification  
+Percent of Populated: 100.0%; no missing value;   
+Number of Unique Values (NA excluded): 2  
+
+```{r 4-dat_dev-hasWlan, echo=FALSE}
+# barchart: of hasWlan
+dat_wlan = dat_dev
+dat_wlan$hasWlan = factor(dat_wlan$hasWlan, levels = c(1, 0)) # set the order of levels 
+dat_wlan %>%
+  group_by(hasWlan) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(hasWlan), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("hasWlan") +
+  ggtitle("Barchart: hasWlan") +
+  theme_bw()
+```
+**Comments**: Over 70% devices has wlan connection. This field is useful combined with repay dataset;                  
+<br>  
+
+
+##### Variable 5: hasBluetooth
+Description: technical specification  
+Percent of Populated: 100.0%; no missing value;   
+Number of Unique Values (NA excluded): 2  
+
+```{r 4-dat_dev-hasBluetooth, echo=FALSE}
+# barchart: of hasBluetooth
+dat_bt = dat_dev
+dat_bt$hasBluetooth = factor(dat_bt$hasBluetooth, levels = c(1, 0)) # set the order of levels 
+dat_bt %>%
+  group_by(hasBluetooth) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(hasBluetooth), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("hasBluetooth") +
+  ggtitle("Barchart: hasBluetooth") +
+  theme_bw()
+```
+**Comments**: Over 80% devices has bluetooth connection. This field is useful combined with repay dataset;   
+<br> 
+
+
+##### Variable 6: mkopo_version_name
+Description: version of Mkopo Rahisi app installed on the device    
+Percent of Populated: 972/973 = 99.9%; 1 missing value;   
+Number of Unique Values (NA excluded): 11  
+
+```{r 4-dat_dev-mkopo_version_name, echo=FALSE}
+# barchart: of mkopo_version_name
+dat_mkopo = dat_dev[!is.na(dat_dev['mkopo_version_name']), ]
+dat_mkopo %>%
+  group_by(mkopo_version_name) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(mkopo_version_name), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("mkopo_version_name") +
+  ggtitle("Barchart: mkopo_version_name") +
+  theme_bw()
+```
+**Comments**: More borrowers are using version 3+. There is a good chance that a higher version indicates the more frequent usage of mobile phone, and a higher configurated mobile phone and higher engagement with the apps, which are good indicators of financial wellness as well. This field would be very useful if combined with repay dataset to help identify more valuable borrowers strategize marketing campaign.      
+<br>  
+
+
+##### Variable 7: android_version
+
+Description: version of Android installed on the device    
+Percent of Populated: 972/973 = 99.9%; 1 missing value;   
+Number of Unique Values (NA excluded): 21  
+
+```{r 4-dat_dev-android_version, echo=FALSE}
+# barchart: of android_version
+dat_andr = dat_dev[!is.na(dat_dev['android_version']), ]
+dat_andr %>%
+  group_by(android_version) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(android_version), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("android_version") +
+  ggtitle("Barchart: android_version") +
+  theme_bw()
+```
+**Comments**: Consider it as a histogram. More borrowers are using version 4+. Similar as mkopo_version, there is a good chance that a higher version indicates the frequent usage of mobile phone, and a higher configurated mobile phone and higher engagement with the networks, which are good indicators of financial wellness as well. This field would be very useful if combined with repay dataset to help identify more valuable borrowers strategize marketing campaign.      
+<br> 
+
+
+
+### 5. DQR: dat_mpesa
+
+#### 5.1 File Description:
+
+File name: dataAnalystChallenge_mpesa.csv     
+File info: a sample of mobile money transactions per user     
+Source: the company  
+Number of records: 20981   
+Number of variables: 5 fields, 1 id, 1 date, 2 Categorical   
+<br>
+
+
+#### 5.2 List of info for each variable
+<br>
+
+##### Variable 1: person_id_random
+Description: 10-digit borrower identifier
+Percent of Populated: 100%, no missing value   
+Number of Unique Values: 922   
+Summary of statistics:
+
+```{r 5-dat_mpesa-person_id_random-1, echo=FALSE}
+attr_ppl = dat_mpesa %>%
+  group_by(person_id_random) %>%
+  summarise(count = n())
+summary(attr_ppl$count)
+```
+**Comments**: Each borrower was provided with at most 30 records of transactions. It could be safe to divide borrowers as frequent-trader and infrequent-trader based on the count of each unique borrower in this dataset. This would help profile the users and strategize marketing campaign correspondently.   
+<br>  
+
+
+##### Variable 2: date  
+Description: date of transaction in East Africa time   
+Percent of Populated: 100%, no missing value   
+Number of Unique Values (NA excluded): 643 
+Range of Values: from 1970-01-17 to 2015-11-05    
+<br>  
+
+```{r 5-dat_mpesa-date, error = FALSE, warning = FALSE, echo=FALSE}
+# histogram: date
+dat_date = dat_mpesa[!is.na(dat_mpesa['date']),]
+dat_date$date = as.POSIXct(dat_date$date) # extract first 10 chrs as year-month-day
+ggplot(dat_date, aes(date, ..count..)) + 
+  geom_histogram(bins = 100, fill = 'steelblue') +
+  theme_bw() + 
+  xlab('Mpesa Date') +
+  ylab('Number') + 
+  ggtitle("Histogram: mpesa_date") +
+  scale_x_datetime(breaks = date_breaks("3 months"),
+                   labels = date_format("%Y-%b"),
+                    limits = c(as.POSIXct("2013-06-01"), 
+                              as.POSIXct("2015-11-05")) )
+```
+**Comments**: Though the dataset is a sample data, we can still see the disributions of transactions as we assume the sampling is random. According to the figure, most transactions occurred between 2014-July and 2015-Oct. Not sure what could explain the decline of volumn starting from 2015-July. This data would be useful when combined with person_id_random and repayment dataset to form customer profile.       
+<br>
+
+
+##### Variable 3: transaction_type  
+Description: type of mobile money transaction (i.e. buy_mpesa_credit: deposit to mobile wallet)   
+Percent of Populated: 100.0%; no missing value;   
+Number of Unique Values (NA excluded): 4  
+
+```{r 5-dat_mpesa-transaction_type, echo=FALSE}
+# barchart: of transaction_type
+dat_trans = dat_mpesa
+dat_trans$transaction_type = factor(dat_trans$transaction_type, 
+                                    levels = c('send_money', 'buy_mpesa_credit',
+                                               'transfer_from_mshwari', 'transfer_to_mshwari')) # set the order of levels 
+dat_trans %>%
+  group_by(transaction_type) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(transaction_type), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("transaction_type") +
+  ggtitle("Barchart: transaction_type") +
+  theme_bw()
+```
+**Comments**: Interesting to see the number of send_money is much larger than the number of buy_mpesa_credit. The difference could be potentially explained by the ongoing loans and the default, or maybe the reason that on average sent money is smaller than buying credits. This data would be useful when combined with person_id_random and repayment dataset to form customer profile.           
+<br>
+
+
+##### Variable 4: direction  
+Description: in/out of mobile money wallet     
+Percent of Populated: 100.0%; no missing value;     
+Number of Unique Values (NA excluded): 2  
+
+```{r 5-dat_mpesa-direction, echo=FALSE}
+# barchart: of direction
+dat_mpesa %>%
+  group_by(direction) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = factor(direction), y = count)) + 
+  geom_bar(fill = 'steelblue', stat = 'identity') +
+  geom_text(aes(label = count), vjust= -0.2, color="steelblue", size=3.5) + 
+  ylab("Count") +
+  xlab("direction") +
+  ggtitle("Barchart: direction") +
+  theme_bw()
+```
+**Comments**: Out = send_money + transfer_to_mshwari, In = buy_mpesa_credit + transfer_from_mshwari;        
+<br>
+
+
+##### Variable 5: amount
+Description: transaction amount     
+Percent of Populated: 20956/20981=99.9%; no missing value;     
+Number of Unique Values (NA excluded): 1354  
+
+```{r 5-dat_mpesa-amount, error=FALSE, echo=FALSE, warning = FALSE}
+# Histogram: of amount by direction
+p1 <- dat_mpesa %>%
+  filter(direction == 'in') %>%
+  ggplot(aes(x = amount)) + 
+  geom_histogram(bins = 50, fill = 'steelblue') +
+  ylab("Number") +
+  xlab("direction in") +
+  scale_x_sqrt() +
+  ylim(0, 2000) +
+  ggtitle("Histogram: of amount by direction in") +
+  theme_bw()
+p2 <- dat_mpesa %>%
+  filter(direction == 'out') %>%
+  ggplot(aes(x = amount)) + 
+  geom_histogram(bins = 50, fill = 'steelblue') +
+  ylab("Number") +
+  xlab("direction out") +
+  scale_x_sqrt() +
+  ggtitle("Histogram: of amount by direction out") +
+  ylim(0, 2000) +
+  theme_bw()
+grid.arrange(grobs = list(p1, p2), ncol = 1, main = "Main title")
+```
+**Comments**: Total amount 'in': 29595409. Total amount 'out': 29158057. The amount of money 'in' is very close to the amount of money 'out'. Recalling the # of 'in' is around 20% smaller than the # of money 'out', it means users on average send out a smaller amount of money each time compared with buying credits. Think about we usually use credit cards to do multiple purchase before we make a payment to the credit card company. This field would be useful when combined with each user and create a more granular profile of the user.        
+<br>
+
+
+
