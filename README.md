@@ -1,4 +1,4 @@
-# Facebook-Marketing-in-Lending-Business
+# Facebook-User-Acquisition-in-Lending-Business
 The project is focusing on user acquisition through digital channels like Facebook. In lending business, companies want to acquire users that have a higher likelihood of repayment. However, in many financially underserved places, many people have no financial identity like a credit score. So taking the first risk is quite a thing here. <br>
 
 This is a project collaborated with a fintech company. The datasets are a __random sample of only 1,000 records__. I will just talk slight about the background of the business. <br>
