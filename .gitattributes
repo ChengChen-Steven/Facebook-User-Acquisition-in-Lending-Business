@@ -1,2 +1,3 @@
 *.ipynb linguist-language=Python
 *.html linguist-language=Python
+*.Rmd linguist-language=R
